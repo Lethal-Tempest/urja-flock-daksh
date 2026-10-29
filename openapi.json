@@ -1,0 +1,1761 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Urja Meter API",
+    "description": "\nA clean, read-only REST API over the **Urja Meter Ops** portal (which has no API of its own).\n\n* **Meters**: nameplate, location, network position, and consumption readings.\n* **Network**: the zone \u2192 transformer hierarchy, reconstructed and repaired from per-meter records.\n* **Data quality**: every defect found in the portal's data and what was done about it.\n\nMeter and network data is served from a catalog refreshed from the portal's bulk export\n(see `data_as_of`); consumption is fetched live and cached briefly.\nAll errors use the shape `{\"error\": \"<code>\", \"message\": \"<text>\"}`.\n",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Health",
+        "description": "Liveness plus upstream status. Never fails: reports `degraded` instead.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/meters": {
+      "get": {
+        "tags": [
+          "meters"
+        ],
+        "summary": "List Meters",
+        "description": "Search and filter meters. All filters combine with AND; code filters match a code at that\nlevel anywhere in the network (e.g. `feeder=F-001` spans both branches that carry F-001).",
+        "operationId": "list_meters_v1_meters_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Substring of meter id or serial number (case-insensitive)",
+              "title": "Q"
+            },
+            "description": "Substring of meter id or serial number (case-insensitive)"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MeterStatus"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Repeat to match any of several",
+              "title": "Status"
+            },
+            "description": "Repeat to match any of several"
+          },
+          {
+            "name": "make",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Manufacturer, e.g. `HPL`; repeatable",
+              "title": "Make"
+            },
+            "description": "Manufacturer, e.g. `HPL`; repeatable"
+          },
+          {
+            "name": "phase",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Phase"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Phase"
+            }
+          },
+          {
+            "name": "installation_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/InstallationType"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Installation Type"
+            }
+          },
+          {
+            "name": "zone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Zone"
+            }
+          },
+          {
+            "name": "circle",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Circle"
+            }
+          },
+          {
+            "name": "division",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Division"
+            }
+          },
+          {
+            "name": "subdivision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subdivision"
+            }
+          },
+          {
+            "name": "substation",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Substation"
+            }
+          },
+          {
+            "name": "feeder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Feeder"
+            }
+          },
+          {
+            "name": "transformer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Transformer code, e.g. `DT-007`",
+              "title": "Transformer"
+            },
+            "description": "Transformer code, e.g. `DT-007`"
+          },
+          {
+            "name": "node",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Network node id: every meter below that node",
+              "title": "Node"
+            },
+            "description": "Network node id: every meter below that node"
+          },
+          {
+            "name": "bbox",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`south,west,north,east` in degrees",
+              "title": "Bbox"
+            },
+            "description": "`south,west,north,east` in degrees"
+          },
+          {
+            "name": "near",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`lat,lng`; results sorted nearest first",
+              "title": "Near"
+            },
+            "description": "`lat,lng`; results sorted nearest first"
+          },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 100,
+              "exclusiveMinimum": 0,
+              "default": 1.0,
+              "title": "Radius Km"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeterPage"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "502": {
+            "description": "The portal is unreachable or failing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/meters/{meter_id}": {
+      "get": {
+        "tags": [
+          "meters"
+        ],
+        "summary": "Get Meter",
+        "description": "One meter with its full network path and any repairs applied to its record.\nMeters added since the last catalog refresh are looked up live.",
+        "operationId": "get_meter_v1_meters__meter_id__get",
+        "parameters": [
+          {
+            "name": "meter_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Meter number, e.g. `J100000`",
+              "title": "Meter Id"
+            },
+            "description": "Meter number, e.g. `J100000`"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meter"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "502": {
+            "description": "The portal is unreachable or failing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/meters/{meter_id}/consumption": {
+      "get": {
+        "tags": [
+          "meters"
+        ],
+        "summary": "Get Meter Consumption",
+        "description": "Register readings and usage for a meter. Readings are half-hourly for some meters and daily\nfor others; `summary.interval_minutes` says which. With only one bound the window is 7 days;\nwith neither, the portal's latest 7 days are returned.",
+        "operationId": "get_meter_consumption_v1_meters__meter_id__consumption_get",
+        "parameters": [
+          {
+            "name": "meter_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,32}$",
+              "description": "Meter number, e.g. `J100000`",
+              "title": "Meter Id"
+            },
+            "description": "Meter number, e.g. `J100000`"
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "First local day, inclusive (YYYY-MM-DD)",
+              "title": "Start"
+            },
+            "description": "First local day, inclusive (YYYY-MM-DD)"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Last local day, inclusive (YYYY-MM-DD)",
+              "title": "End"
+            },
+            "description": "Last local day, inclusive (YYYY-MM-DD)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Consumption"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "502": {
+            "description": "The portal is unreachable or failing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/network": {
+      "get": {
+        "tags": [
+          "network"
+        ],
+        "summary": "Get Network",
+        "description": "The reconstructed zone > circle > division > subdivision > substation > feeder > transformer tree.",
+        "operationId": "get_network_v1_network_get",
+        "parameters": [
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 6,
+              "minimum": 0,
+              "description": "Levels below zone to include (6 = down to transformers)",
+              "default": 6,
+              "title": "Depth"
+            },
+            "description": "Levels below zone to include (6 = down to transformers)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkTree"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "502": {
+            "description": "The portal is unreachable or failing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/network/nodes/{node_id}": {
+      "get": {
+        "tags": [
+          "network"
+        ],
+        "summary": "Get Network Node",
+        "description": "One node with its ancestors and direct children. List its meters with `GET /v1/meters?node={id}`.",
+        "operationId": "get_network_node_v1_network_nodes__node_id__get",
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Node Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkNodeDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "502": {
+            "description": "The portal is unreachable or failing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/transformers": {
+      "get": {
+        "tags": [
+          "network"
+        ],
+        "summary": "List Transformers",
+        "description": "All distribution transformers with capacity and connected-meter counts.",
+        "operationId": "list_transformers_v1_transformers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransformerList"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The portal is unreachable or failing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/transformers/{code}": {
+      "get": {
+        "tags": [
+          "network"
+        ],
+        "summary": "Get Transformer",
+        "operationId": "get_transformer_v1_transformers__code__get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Transformer"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "502": {
+            "description": "The portal is unreachable or failing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/data-quality": {
+      "get": {
+        "tags": [
+          "network"
+        ],
+        "summary": "Get Data Quality",
+        "description": "Every defect found in the portal's records and how it was handled.",
+        "operationId": "get_data_quality_v1_data_quality_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataQualityReport"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The portal is unreachable or failing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Consumption": {
+        "properties": {
+          "meter_id": {
+            "type": "string",
+            "title": "Meter Id"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start",
+            "description": "First local day requested (inclusive). Null if the portal default window was used."
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End",
+            "description": "Last local day requested (inclusive)."
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone",
+            "default": "Asia/Kolkata"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ConsumptionSummary"
+          },
+          "readings": {
+            "items": {
+              "$ref": "#/components/schemas/Reading"
+            },
+            "type": "array",
+            "title": "Readings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meter_id",
+          "start",
+          "end",
+          "summary",
+          "readings"
+        ],
+        "title": "Consumption"
+      },
+      "ConsumptionSummary": {
+        "properties": {
+          "readings": {
+            "type": "integer",
+            "title": "Readings"
+          },
+          "interval_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Minutes",
+            "description": "Typical spacing of readings: 30 (half-hourly AMI) or 1440 (daily)."
+          },
+          "first_reading_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Reading At"
+          },
+          "last_reading_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reading At"
+          },
+          "consumed_kwh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumed Kwh",
+            "description": "Energy used between the first and last reading."
+          },
+          "consumed_kvah": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumed Kvah"
+          },
+          "power_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Power Factor",
+            "description": "consumed_kwh / consumed_kvah over the window."
+          },
+          "voltage_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voltage Min"
+          },
+          "voltage_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voltage Avg"
+          },
+          "voltage_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voltage Max"
+          },
+          "missing_intervals": {
+            "type": "integer",
+            "title": "Missing Intervals",
+            "description": "Expected readings absent from the window, given interval_minutes."
+          }
+        },
+        "type": "object",
+        "required": [
+          "readings",
+          "interval_minutes",
+          "first_reading_at",
+          "last_reading_at",
+          "consumed_kwh",
+          "consumed_kvah",
+          "power_factor",
+          "voltage_min",
+          "voltage_avg",
+          "voltage_max",
+          "missing_intervals"
+        ],
+        "title": "ConsumptionSummary"
+      },
+      "DataIssue": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "blank",
+              "conflict",
+              "code_reused",
+              "unknown_reference",
+              "invalid",
+              "not_in_export"
+            ],
+            "title": "Kind"
+          },
+          "meter_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meter Id"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "problem": {
+            "type": "string",
+            "title": "Problem"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "field",
+          "problem",
+          "action"
+        ],
+        "title": "DataIssue",
+        "description": "A defect found in the portal's data, and what this API did about it."
+      },
+      "DataQualityReport": {
+        "properties": {
+          "data_as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Data As Of"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts",
+            "description": "Number of issues per kind."
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/DataIssue"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data_as_of",
+          "counts",
+          "issues"
+        ],
+        "title": "DataQualityReport"
+      },
+      "ErrorBody": {
+        "properties": {
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "examples": [
+              "not_found"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error",
+          "message"
+        ],
+        "title": "ErrorBody"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "examples": [
+              "ok",
+              "degraded"
+            ]
+          },
+          "portal_reachable": {
+            "type": "boolean",
+            "title": "Portal Reachable"
+          },
+          "catalog_loaded": {
+            "type": "boolean",
+            "title": "Catalog Loaded"
+          },
+          "catalog_age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Age Seconds"
+          },
+          "meters": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meters"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "portal_reachable",
+          "catalog_loaded",
+          "catalog_age_seconds",
+          "meters"
+        ],
+        "title": "Health"
+      },
+      "InstallationType": {
+        "type": "string",
+        "enum": [
+          "whole_current",
+          "ct_operated"
+        ],
+        "title": "InstallationType"
+      },
+      "Location": {
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "title": "Latitude"
+          },
+          "longitude": {
+            "type": "number",
+            "title": "Longitude"
+          }
+        },
+        "type": "object",
+        "required": [
+          "latitude",
+          "longitude"
+        ],
+        "title": "Location"
+      },
+      "Meter": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "examples": [
+              "J100000"
+            ]
+          },
+          "serial_number": {
+            "type": "string",
+            "title": "Serial Number"
+          },
+          "make": {
+            "type": "string",
+            "title": "Make"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/Phase"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MeterStatus"
+          },
+          "installation_type": {
+            "$ref": "#/components/schemas/InstallationType"
+          },
+          "transformer_code": {
+            "type": "string",
+            "title": "Transformer Code",
+            "examples": [
+              "DT-001"
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "network": {
+            "items": {
+              "$ref": "#/components/schemas/NodeRef"
+            },
+            "type": "array",
+            "title": "Network",
+            "description": "Path from zone down to the meter's distribution transformer."
+          },
+          "data_issues": {
+            "items": {
+              "$ref": "#/components/schemas/DataIssue"
+            },
+            "type": "array",
+            "title": "Data Issues",
+            "description": "Repairs applied to this meter's portal record."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "serial_number",
+          "make",
+          "phase",
+          "status",
+          "installation_type",
+          "transformer_code",
+          "location",
+          "network",
+          "data_issues"
+        ],
+        "title": "Meter"
+      },
+      "MeterPage": {
+        "properties": {
+          "meta": {
+            "$ref": "#/components/schemas/PageMeta"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MeterSummary"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meta",
+          "data"
+        ],
+        "title": "MeterPage"
+      },
+      "MeterStatus": {
+        "type": "string",
+        "enum": [
+          "installed",
+          "faulty",
+          "decommissioned"
+        ],
+        "title": "MeterStatus"
+      },
+      "MeterSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "examples": [
+              "J100000"
+            ]
+          },
+          "serial_number": {
+            "type": "string",
+            "title": "Serial Number"
+          },
+          "make": {
+            "type": "string",
+            "title": "Make"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/Phase"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MeterStatus"
+          },
+          "installation_type": {
+            "$ref": "#/components/schemas/InstallationType"
+          },
+          "transformer_code": {
+            "type": "string",
+            "title": "Transformer Code",
+            "examples": [
+              "DT-001"
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "serial_number",
+          "make",
+          "phase",
+          "status",
+          "installation_type",
+          "transformer_code",
+          "location"
+        ],
+        "title": "MeterSummary"
+      },
+      "NetworkLevel": {
+        "type": "string",
+        "enum": [
+          "zone",
+          "circle",
+          "division",
+          "subdivision",
+          "substation",
+          "feeder",
+          "transformer"
+        ],
+        "title": "NetworkLevel"
+      },
+      "NetworkNode": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "level": {
+            "$ref": "#/components/schemas/NetworkLevel"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "meter_count": {
+            "type": "integer",
+            "title": "Meter Count"
+          },
+          "meters_by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/MeterStatus"
+            },
+            "type": "object",
+            "title": "Meters By Status"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkNode"
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "level",
+          "code",
+          "name",
+          "meter_count",
+          "meters_by_status"
+        ],
+        "title": "NetworkNode"
+      },
+      "NetworkNodeDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "level": {
+            "$ref": "#/components/schemas/NetworkLevel"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "meter_count": {
+            "type": "integer",
+            "title": "Meter Count"
+          },
+          "meters_by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/MeterStatus"
+            },
+            "type": "object",
+            "title": "Meters By Status"
+          },
+          "ancestors": {
+            "items": {
+              "$ref": "#/components/schemas/NodeRef"
+            },
+            "type": "array",
+            "title": "Ancestors"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/NodeRef"
+            },
+            "type": "array",
+            "title": "Children"
+          },
+          "transformer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Transformer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when this node is a transformer."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "level",
+          "code",
+          "name",
+          "meter_count",
+          "meters_by_status",
+          "ancestors",
+          "children"
+        ],
+        "title": "NetworkNodeDetail"
+      },
+      "NetworkTree": {
+        "properties": {
+          "data_as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Data As Of"
+          },
+          "zones": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkNode"
+            },
+            "type": "array",
+            "title": "Zones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data_as_of",
+          "zones"
+        ],
+        "title": "NetworkTree"
+      },
+      "NodeRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Path-qualified node id, e.g. `Z-01.C-01.D-01`. Stable across refreshes."
+          },
+          "level": {
+            "$ref": "#/components/schemas/NetworkLevel"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "The utility's code for this node, e.g. `D-01`. Not unique on its own above feeder level."
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "level",
+          "code",
+          "name"
+        ],
+        "title": "NodeRef"
+      },
+      "PageMeta": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          },
+          "data_as_of": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Data As Of",
+            "description": "When the meter catalog was last refreshed from the portal."
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "page",
+          "page_size",
+          "data_as_of"
+        ],
+        "title": "PageMeta"
+      },
+      "Phase": {
+        "type": "string",
+        "enum": [
+          "single",
+          "three"
+        ],
+        "title": "Phase"
+      },
+      "Reading": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "Reading time, ISO-8601 with the utility's local offset (+05:30)."
+          },
+          "energy_kwh": {
+            "type": "number",
+            "title": "Energy Kwh",
+            "description": "Cumulative active-energy register (kWh). Never resets in observed data."
+          },
+          "apparent_energy_kvah": {
+            "type": "number",
+            "title": "Apparent Energy Kvah",
+            "description": "Cumulative apparent-energy register (kVAh)."
+          },
+          "voltage_r": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voltage R",
+            "description": "R-phase voltage (V) at the reading."
+          },
+          "consumed_kwh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consumed Kwh",
+            "description": "kWh used since the previous reading in this response; null for the first."
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "energy_kwh",
+          "apparent_energy_kvah",
+          "voltage_r",
+          "consumed_kwh"
+        ],
+        "title": "Reading"
+      },
+      "Transformer": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "capacity_kva": {
+            "type": "number",
+            "title": "Capacity Kva"
+          },
+          "feeder_code": {
+            "type": "string",
+            "title": "Feeder Code"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Id",
+            "description": "Network node id, or null if no meter places it in the hierarchy."
+          },
+          "meter_count": {
+            "type": "integer",
+            "title": "Meter Count"
+          },
+          "meters_by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/MeterStatus"
+            },
+            "type": "object",
+            "title": "Meters By Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "capacity_kva",
+          "feeder_code",
+          "node_id",
+          "meter_count",
+          "meters_by_status"
+        ],
+        "title": "Transformer"
+      },
+      "TransformerList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/Transformer"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "TransformerList"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
